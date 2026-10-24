@@ -561,6 +561,7 @@ function run(input) {
     const name = str(file.path);
     requireThat(
       !name.startsWith("/") &&
+        !/^[A-Za-z]:/.test(name) &&
         !name.includes("\\") &&
         !name.split("/").some((p) => p === ".." || p === ""),
       "Unsafe restore path",
@@ -572,6 +573,7 @@ function run(input) {
     );
     const chunks = [];
     let failed = false;
+    let totalBytes = 0;
     for (const digest of arr(file.chunks, "chunks", 10000)) {
       requireThat(/^[0-9a-f]{64}$/.test(digest), "Invalid chunk hash");
       const encoded = objects[digest];
@@ -588,6 +590,10 @@ function run(input) {
         "Chunk must be canonical base64",
       );
       const bytes = Buffer.from(encoded, "base64");
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      requireThat(!(encoded.endsWith("==") && (alphabet.indexOf(encoded.at(-3)) & 15)) && !(encoded.endsWith("=") && !encoded.endsWith("==") && (alphabet.indexOf(encoded.at(-2)) & 3)), "Noncanonical base64 padding bits");
+      totalBytes += bytes.length;
+      requireThat(totalBytes <= file.size && totalBytes <= 10000000, "Chunk bytes exceed declared file size");
       if (sha(bytes) !== digest) {
         findings.push({ path: name, chunk: digest, code: "CORRUPT_CHUNK" });
         failed = true;
